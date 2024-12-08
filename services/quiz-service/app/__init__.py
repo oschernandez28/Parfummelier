@@ -1,6 +1,12 @@
 from flask import Flask, jsonify
 from flask_cors import CORS
 from .routes import quiz_blueprint
+import os
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
 
 def create_app():
     app = Flask(__name__)
@@ -11,7 +17,11 @@ def create_app():
         resources={r"/*": {"origins": "*"}},
         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         supports_credentials=True,
-        allow_headers=["Content-Type", "Authorization", "Access-Control-Allow-Credentials"],
+        allow_headers=[
+            "Content-Type",
+            "Authorization",
+            "Access-Control-Allow-Credentials",
+        ],
     )
 
     # Register blueprints

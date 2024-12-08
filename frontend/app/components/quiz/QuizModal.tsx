@@ -5,11 +5,12 @@
 "use client";
 import React, { useState } from "react";
 import ReactDOM from "react-dom";
+import axios from "axios";
 
 interface QuizModalProps {
-  isOpen: boolean; //Controls whether the modal is open or closed. When true, the modal is visible; when false, it is hidden.
+  isOpen: boolean;
 
-  onClose: () => void; //A function to close the modal. This is called when the quiz is completed or if the user needs to exit the modal.
+  onClose: () => void;
 
   questions: { question: string; options: string[] }[];
 }
@@ -21,9 +22,11 @@ const QuizModal: React.FC<QuizModalProps> = ({
 }) => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<(string | null)[]>(
-    Array(questions.length).fill(null)
-  ); // Store strings
-  const [selectedOption, setSelectedOption] = useState<string | null>(null); // Store string value
+    Array(questions.length).fill(null),
+  );
+  const [selectedOption, setSelectedOption] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const currentQuestion = questions[currentQuestionIndex];
 
@@ -32,21 +35,64 @@ const QuizModal: React.FC<QuizModalProps> = ({
     setSelectedOption(optionValue);
   };
 
-  const handleNextQuestion = () => {
+  const submitQuizAnswers = async (answers: string[]) => {
+    try {
+      // Get access token
+      const tokenResponse = await axios.get("/api/getAccessToken");
+      const { access_token } = tokenResponse.data;
+
+      // Submit quiz answers
+      const response = await axios.post(
+        "http://localhost:8000/quiz/submit-quiz",
+        {
+          answers: answers,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${access_token}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+
+      if (response.status === 201) {
+        // Success handling
+        console.log("Quiz submitted successfully:", response.data);
+        onClose();
+      }
+    } catch (error) {
+      console.error("Error submitting quiz:", error);
+      setError("Failed to submit quiz. Please try again.");
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleNextQuestion = async () => {
     if (selectedOption !== null) {
       const updatedAnswers = [...answers];
-      updatedAnswers[currentQuestionIndex] = selectedOption; // Store the string value
+      updatedAnswers[currentQuestionIndex] = selectedOption;
       setAnswers(updatedAnswers);
 
       if (currentQuestionIndex < questions.length - 1) {
         setCurrentQuestionIndex(currentQuestionIndex + 1);
+        setSelectedOption(null);
       } else {
-        // Quiz completed
-        setCurrentQuestionIndex(0); // Reset to the first question
-        console.log("Survey answers:", updatedAnswers); // Log the string answers
-        onClose(); // Close the modal when the survey is completed
+        // Quiz completed - submit answers
+        setIsSubmitting(true);
+        setError(null);
+
+        // Filter out any null values and submit
+        const validAnswers = updatedAnswers.filter(
+          (answer): answer is string => answer !== null,
+        );
+        if (validAnswers.length === questions.length) {
+          await submitQuizAnswers(validAnswers);
+        }
+
+        // Reset state
+        setCurrentQuestionIndex(0);
+        setSelectedOption(null);
       }
-      setSelectedOption(null); // Reset selection for the next question
     }
   };
 
@@ -59,12 +105,11 @@ const QuizModal: React.FC<QuizModalProps> = ({
           Question {currentQuestionIndex + 1}
         </h2>
         <p className="font-bold mb-4">{currentQuestion.question}</p>
-
         <div className="space-y-4">
           {currentQuestion.options.map((option, index) => (
             <button
               key={index}
-              onClick={() => handleOptionClick(option)} // Pass the string value of the option
+              onClick={() => handleOptionClick(option)}
               className={`block w-full text-left p-2 rounded-md ${
                 selectedOption === option
                   ? "bg-blue-200"
@@ -75,25 +120,27 @@ const QuizModal: React.FC<QuizModalProps> = ({
             </button>
           ))}
         </div>
-
+        {error && <div className="mt-4 text-red-500 text-sm">{error}</div>}
         <div className="mt-6 text-right">
           <button
             onClick={handleNextQuestion}
-            disabled={selectedOption === null}
+            disabled={selectedOption === null || isSubmitting}
             className={`${
-              selectedOption === null
+              selectedOption === null || isSubmitting
                 ? "bg-gray-400 cursor-not-allowed"
                 : "bg-blue-600 hover:bg-blue-500"
             } text-white py-2 px-4 rounded-md`}
           >
-            {currentQuestionIndex < questions.length - 1
-              ? "Next Question"
-              : "Submit Survey"}
+            {isSubmitting
+              ? "Submitting..."
+              : currentQuestionIndex < questions.length - 1
+                ? "Next Question"
+                : "Submit"}
           </button>
         </div>
       </div>
     </div>,
-    document.getElementById("portal")!
+    document.getElementById("portal")!,
   );
 };
 

@@ -2,10 +2,14 @@ aldehydic: #d8e9f6
 almond: #f1e3c5
 amber: #bc4d10
 animalic: #8E4B13
+anis: #e7ceec
 aquatic: #63cce2
 aromatic: #37a089
 balsamic: #ad8359
+beeswax: #F0B642
+bitter: #C1C316
 cacao: #9a3a0d
+camphor: #5D6E27
 caramel: #DDA356
 cherry: #ce1d33
 chocolate: #603000
@@ -13,6 +17,7 @@ cinnamon: #D2691E
 citrus: #F9FF52
 coconut: #f1e8d4
 coffee: #503B1D
+conifer: #1b422f
 earthy: #544838
 floral: #FF5F8D
 fresh: #9be5ed
@@ -39,6 +44,7 @@ rose: #FE016B
 rum: #AC2005
 salty: #e9fff9
 smoky: #827487
+soapy: #E3F6FC
 soft spicy: #E27752
 sweet: #ee363b
 terpenic: #d89f00

@@ -10,7 +10,11 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-} from "@/app/components/ui/card/Card";
+} from "../../components/ui/card/Card";
+import AccordMatchPercent from "../../components/ui/accordmatchpercent/AccordMatchPercent";
+import { Heart } from "lucide-react";
+import axios from "axios";
+import { useAuth } from "@/app/components/auth/AuthContext";
 
 interface Accord {
   name: string;
@@ -45,12 +49,14 @@ const getImageUrl = (url: string | null) => {
 
 export default function SingleProductPage() {
   const params = useParams();
+  const { user, refreshUserData } = useAuth();
   const [product, setProduct] = useState<Product | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [imageError, setImageError] = useState(false);
-
-  console.log("Params:", params); // add this to debug
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [favorite, setFavorite] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -62,16 +68,20 @@ export default function SingleProductPage() {
       try {
         // make sure to decode the URL paramter since it might contain space
         const decodedName = decodeURIComponent(params.name as string);
-        console.log("Fetching product:", decodedName);
         // sending request the backend
         const { data } = await api.get(
-          `/products/products/${encodeURIComponent(decodedName)}`,
+          `/products/product/${encodeURIComponent(decodedName)}`,
         );
         const transformedProduct = {
           ...data,
           imageURL: getImageUrl(data.imageURL),
         };
         setProduct(transformedProduct);
+
+        // check if product is in user's favorites
+        if (user && user.favorite_products.includes(transformedProduct.name)) {
+          setFavorite(true);
+        }
       } catch (error) {
         setError(
           error instanceof Error ? error.message : "Failed to fetch product",
@@ -81,7 +91,58 @@ export default function SingleProductPage() {
       }
     };
     fetchProduct();
-  }, [params.name]);
+  }, [params.name, user]);
+
+  const handleToggleFavorite = async () => {
+    if (!product) {
+      return;
+    }
+    setIsUpdating(true);
+    try {
+      const tokenResponse = await axios.get("/api/getAccessToken");
+      const accessToken = tokenResponse.data.access_token;
+
+      if (!accessToken) {
+        throw new Error("No access token available");
+      }
+
+      // prespare the request data
+      const requestData = {
+        favorite_product_name: product?.name,
+        action: favorite ? "remove" : "add",
+      };
+
+      const response = await axios.put(
+        "http://localhost:8000/user/scentbank/products",
+        requestData,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+
+      if (response.status === 200) {
+        setFavorite((prev) => !prev);
+        setUpdateError(null);
+        // refresh user data to keep context in sync
+        await refreshUserData();
+      }
+    } catch (error) {
+      // handle errors
+      console.error("Error updating favorite status: ", error);
+      setUpdateError("Failed to update favorite status");
+
+      if (axios.isAxiosError(error)) {
+        const errorMessage =
+          error.response?.data.error || "Failed to update favorite status";
+        setUpdateError(errorMessage);
+      }
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   if (isLoading) return <LoadingScreen />;
   if (error)
@@ -123,6 +184,8 @@ export default function SingleProductPage() {
                     <p className="text-xl text-gray-600">{product.brand}</p>
                   </div>
 
+                  <AccordMatchPercent productAccords={product.accords} />
+
                   <div>
                     <h2 className="text-xl font-semibold mb-3">Accords</h2>
                     <div className="flex flex-wrap gap-2">
@@ -142,6 +205,24 @@ export default function SingleProductPage() {
                       ))}
                     </div>
                   </div>
+                  {/* add to favorite */}
+                  <button
+                    className="ml-2 px-3 py-1 rounded-full text-sm"
+                    onClick={handleToggleFavorite}
+                    disabled={isUpdating}
+                  >
+                    {isUpdating ? (
+                      <span className="animate-spin">⌛</span>
+                    ) : (
+                      <Heart
+                        fill={favorite ? "currentColor" : "none"}
+                        size={24}
+                      />
+                    )}
+                  </button>
+                  {updateError && (
+                    <p className="text-red-500 text-sm mt-2">{updateError}</p>
+                  )}
                 </div>
               </div>
 

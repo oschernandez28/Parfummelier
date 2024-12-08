@@ -19,11 +19,6 @@ const ProtectedRoute = ({
   const { isAuthenticated, isLoading, refreshToken } = useAuth();
   const router = useRouter();
 
-  console.log("Validate Auth with Protected Route", {
-    isAuthenticated,
-    isLoading,
-  });
-
   useEffect(() => {
     const validatedAuth = async () => {
       if (!isLoading && !isAuthenticated) {

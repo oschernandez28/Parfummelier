@@ -1,9 +1,14 @@
+from types import TracebackType
 from flask_migrate import branches
 from flask import Blueprint, request, jsonify, send_from_directory
 from app.models import db, Product, Accord, Review
 from sqlalchemy import func
 from datetime import date
 import os
+import random
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 product_blueprint = Blueprint("product", __name__)
@@ -61,7 +66,7 @@ def list_products():
 
 
 # NOTE: Single product return
-@product_blueprint.route("/products/<string:name>", methods=["GET"])
+@product_blueprint.route("/product/<string:name>", methods=["GET"])
 def get_product(name):
     product = Product.query.filter_by(name=name).first_or_404()
     base_url = "http://api-gateway:8000/images/"
@@ -222,55 +227,91 @@ def list_accords():
     return jsonify([{"id": accord.id, "name": accord.name} for accord in accords])
 
 
-# Recommendation Route
-@product_blueprint.route("/recommendations", methods=["POST"])
+# NOTE: Recommendation Route
+@product_blueprint.route("/recommendation-by-accord", methods=["POST"])
 def recommend_products():
     try:
+        MIN_MATCH_RATIO = 0.3
+        MAX_RECOMMENDATIONS = 20
+
         data = request.json
-        accordbank = data.get("accordbank", [])
+        logger.info("Received Data: ", data)
 
-        # Normalize accord names to lowercase
-        accordbank = [accord.lower() for accord in accordbank]
+        user_accords = data.get("accordbank", [])
+        logger.info("User Accords: ", user_accords)
 
-        if not accordbank:
+        if not user_accords:
             return jsonify({"error": "No accord bank data provided"}), 400
 
-        # Query the database for products that match any accord in the accordbank
-        recommended_products = (
-            Product.query.join(Product.accords)
-            .filter(
-                func.lower(Accord.name).in_(accordbank)
-            )  # Match lowercased accord names
-            .distinct()
-            .all()
-        )
+        # Normalize accord names to lowercase
+        user_accords = set(accord.lower() for accord in user_accords)
+        logger.info("Normalized user accords: ", user_accords)
 
-        if not recommended_products:
+        # Query All products with their accords
+        all_products = Product.query.join(Product.accords).distinct().all()
+        logger.info("Found producst:", len(all_products))
+
+        # Calculate match ratios and filter products
+        matched_products = []
+
+        for product in all_products:
+            product_accords = set(accord.name.lower() for accord in product.accords)
+
+            if not product_accords:  # Skip products with no accords
+                continue
+
+            # Calculate intersection and match ratio
+            matching_accords = user_accords.intersection(product_accords)
+            match_ratio = len(matching_accords) / len(product_accords)
+
+            if match_ratio >= MIN_MATCH_RATIO:
+                matched_products.append(
+                    {"product": product, "match_ratio": match_ratio}
+                )
+
+        if not matched_products:
             return jsonify({"message": "No recommendations found"}), 200
 
-        # Format the recommendations in JSON format
+        # Randomly select products from matched ones
+        if len(matched_products) > MAX_RECOMMENDATIONS:
+            matched_products = random.sample(matched_products, MAX_RECOMMENDATIONS)
+        else:
+            random.shuffle(matched_products)
+
+        base_url = "http://api-gateway:8000/images/"
+
+        # Format the recommendations
         recommendations = [
             {
-                "id": product.id,
-                "name": product.name,
-                "brand": product.brand,
-                "accords": [accord.name for accord in product.accords],
+                "id": item["product"].id,
+                "name": item["product"].name,
+                "brand": item["product"].brand,
+                "accords": [accord.name for accord in item["product"].accords],
                 "imageURL": (
-                    f"{API_GATEWAY_URL}/product/images/{product.imageURL}"
-                    if product.imageURL
+                    base_url + item["product"].imageURL
+                    if item["product"].imageURL
                     else None
                 ),
+                "match_ratio": round(
+                    item["match_ratio"] * 100, 2
+                ),  # Convert to percentage with 2 decimal places
             }
-            for product in recommended_products
+            for item in matched_products
         ]
 
-        return jsonify({"recommendations": recommendations})
+        return jsonify(
+            {"recommendations": recommendations, "total_matches": len(matched_products)}
+        )
 
     except Exception as e:
+        import traceback
+
         print(f"Error in recommendations route: {e}")
+        print(f"Full error details:", traceback.format_exc())
         return jsonify({"error": str(e)}), 500
 
-@product_blueprint.route("/recommendations/seasonal", methods=["POST"])
+
+@product_blueprint.route("/recommendations/seasonal", methods=["GET"])
 def recommend_by_season():
     try:
         # Determine current season based on today's date
@@ -290,25 +331,82 @@ def recommend_by_season():
         # Seasonal Accord Mapping
         seasonal_accords = {
             "winter": [
-                "Amber", "Animalic", "Leather", "Musky", "Oud", "Patchouli", "Smoky", 
-                "Tobacco", "Vanilla", "Warm Spicy", "Balsamic", "Beeswax", "Bitter", 
-                "Cacao", "Caramel", "Chocolate", "Coffee", "Rum", "Whiskey", "Asphalt", 
-                "Brown Scotch Tape", "Gasoline", "Industrial Glue", "Meat", "Rubber", 
-                "Wet Plaster"
+                "Amber",
+                "Animalic",
+                "Leather",
+                "Musky",
+                "Oud",
+                "Patchouli",
+                "Smoky",
+                "Tobacco",
+                "Vanilla",
+                "Warm Spicy",
+                "Balsamic",
+                "Beeswax",
+                "Bitter",
+                "Cacao",
+                "Caramel",
+                "Chocolate",
+                "Coffee",
+                "Rum",
+                "Whiskey",
+                "Asphalt",
+                "Brown Scotch Tape",
+                "Gasoline",
+                "Industrial Glue",
+                "Meat",
+                "Rubber",
+                "Wet Plaster",
             ],
             "spring": [
-                "Aldehydic", "Floral", "Fresh", "Green", "Herbal", "Powdery", "Rose", 
-                "Violet", "White Floral", "Yellow Floral", "Almond", "Iris", "Lavender", 
-                "Tuberose"
+                "Aldehydic",
+                "Floral",
+                "Fresh",
+                "Green",
+                "Herbal",
+                "Powdery",
+                "Rose",
+                "Violet",
+                "White Floral",
+                "Yellow Floral",
+                "Almond",
+                "Iris",
+                "Lavender",
+                "Tuberose",
             ],
             "summer": [
-                "Aquatic", "Citrus", "Fruity", "Marine", "Salty", "Tropical", "Ozonic", 
-                "Soapy", "Sweet", "Coconut", "Cherry", "Conifer", "Honey", "Sand", "Sour"
+                "Aquatic",
+                "Citrus",
+                "Fruity",
+                "Marine",
+                "Salty",
+                "Tropical",
+                "Ozonic",
+                "Soapy",
+                "Sweet",
+                "Coconut",
+                "Cherry",
+                "Conifer",
+                "Honey",
+                "Sand",
+                "Sour",
             ],
             "fall": [
-                "Aromatic", "Earthy", "Mossy", "Soft Spicy", "Woody", "Camphor", "Cinnamon", 
-                "Nutty", "Spicy", "Mineral", "Vinyl", "Plastic", "Hot Iron", "Bacon", 
-                "Tennis Ball"
+                "Aromatic",
+                "Earthy",
+                "Mossy",
+                "Soft Spicy",
+                "Woody",
+                "Camphor",
+                "Cinnamon",
+                "Nutty",
+                "Spicy",
+                "Mineral",
+                "Vinyl",
+                "Plastic",
+                "Hot Iron",
+                "Bacon",
+                "Tennis Ball",
             ],
         }
 
@@ -317,51 +415,57 @@ def recommend_by_season():
         # Query products matching seasonal accords and count matches
         recommended_products = (
             db.session.query(
-                Product,
-                func.count(func.lower(Accord.name)).label("match_count")
+                Product, func.count(func.lower(Accord.name)).label("match_count")
             )
             .join(Product.accords)
             .filter(func.lower(Accord.name).in_([accord.lower() for accord in accords]))
             .group_by(Product.id)
             .having(func.count(func.lower(Accord.name)) >= 3)
-            .order_by(func.count(func.lower(Accord.name)).desc())  # Order by match count
+            .order_by(func.random())  # Order by match count
             .limit(10)  # Fetch more products initially to handle duplicates
             .all()
         )
 
         if not recommended_products:
-            return jsonify({"message": f"No recommendations found for the {season} season"}), 200
+            return (
+                jsonify(
+                    {"message": f"No recommendations found for the {season} season"}
+                ),
+                200,
+            )
 
         # Generate unique recommendations
         recommendations = []
         added_names = set()  # Track already added product names
+        base_url = "http://api-gateway:8000/images/"
 
         for product, match_count in recommended_products:
             if product.name.lower() not in added_names:
-                recommendations.append({
-                    "id": product.id,
-                    "name": product.name,
-                    "brand": product.brand,
-                    "accords": [accord.name for accord in product.accords],
-                    "imageURL": (
-                        f"{API_GATEWAY_URL}/product/images/{product.imageURL}"
-                        if product.imageURL
-                        else None
-                    ),
-                    "matching_accords_count": match_count,  # Include the match count
-                })
+                recommendations.append(
+                    {
+                        "id": product.id,
+                        "name": product.name,
+                        "brand": product.brand,
+                        "accords": [accord.name for accord in product.accords],
+                        "imageURL": (
+                            base_url + product.imageURL if product.imageURL else None
+                        ),
+                        "matching_accords_count": match_count,  # Include the match count
+                    }
+                )
                 added_names.add(product.name.lower())
 
             # Stop adding products once we have 5 unique recommendations
             if len(recommendations) == 5:
                 break
 
-        return jsonify({"season": season.capitalize(), "recommendations": recommendations})
+        return jsonify(
+            {"season": season.capitalize(), "recommendations": recommendations}
+        )
 
     except Exception as e:
         print(f"Error in seasonal recommendations route: {e}")
         return jsonify({"error": str(e)}), 500
-
 
 
 # NOTE: Rating Routes

@@ -321,22 +321,51 @@ def update_favorite_accords(current_user):
 @token_required
 def update_favorite_products(current_user):
     try:
-        favorite_products = request.json.get("favorite_products", [])
+        product_name = request.json.get("favorite_product_name")
+        action = request.json.get("action")
+
+        if not product_name or not action:
+            return jsonify({"error": "Product name and action are required"}), 400
+
         scent_bank = ScentBank.query.get(current_user.scentID)
         if not scent_bank:
             return jsonify({"error": "ScentBank not found for this user"}), 404
 
-        product_objects = []
-        for product in favorite_products:
-            product_obj = Product.query.filter_by(name=product).first()
-            if not product_obj:
-                product_obj = Product(name=product)
-                db.session.add(product_obj)
-            product_objects.append(product_obj)
+        # Get or create the product
+        product_obj = Product.query.filter_by(name=product_name).first()
 
-        scent_bank.favorite_products = product_objects
+        # When this is the first time user add a new product into favorite_products
+        if not product_obj:
+            product_obj = Product(name=product_name)
+            db.session.add(product_obj)
+
+        # NOTE: when user want to add new perfume into favorite_products
+        if action == "add":
+            if product_obj not in scent_bank.favorite_products:
+                scent_bank.favorite_products.append(product_obj)
+                message = f"Product {product_name} added to favorites"
+            else:
+                message = f"Produt {product_name} is already in favorites"
+
+        # NOTE: when user want to remove the perfume from favorite_accords
+        elif action == "remove":
+            if product_obj in scent_bank.favorite_products:
+                scent_bank.favorite_products.remove(product_obj)
+                message = f"Product {product_name} removed from favorites"
+            else:
+                message = f"Product {product_name} was not in favorites"
+
+        else:
+            return jsonify({"error": "Invalid action. User 'add' or 'remove'"}), 400
+
         db.session.commit()
-        return jsonify({"message": "Favorite products updated successfully"}), 201
+
+        # return updated list of favorite
+        favorite_products = [product.name for product in scent_bank.favorite_products]
+        return (
+            jsonify({"message": message, "favorite_products": favorite_products}),
+            200,
+        )
 
     except Exception as e:
         db.session.rollback()
@@ -465,6 +494,12 @@ def get_user_info(current_user):
             "lastName": current_user.lastName,
             "userName": current_user.userName,
             "favorite_accords": [accord.name for accord in scent_bank.favorite_accords],
+            "favorite_products": [
+                product.name for product in scent_bank.favorite_products
+            ],
+            "favorite_collections": [
+                collection.name for collection in scent_bank.favorite_collections
+            ],
         }
 
         return jsonify(user_info), 200
@@ -520,6 +555,7 @@ def get_user_preferences(current_user):
         return jsonify(scentBank), 200
     except Exception as e:
         return jsonify({"error": f"Error fetching Scent Bank: {str(e)}"}), 500
+
 
 @user_blueprint.route("/scentbank/quiz-accords/<int:user_id>", methods=["POST"])
 @cross_origin(origin="http://quiz-service:5000")

@@ -2,6 +2,9 @@ from flask import Blueprint, request, jsonify, abort
 from typing import List, Dict
 import requests
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 PRODUCT_API_URL_QUIZ_SERVICES = os.getenv(
     "PRODUCT_API_URL", "http://product-service:5000"
@@ -17,6 +20,7 @@ def home():
 
 # In-memory dictionary for user accordbanks
 user_accordbanks: Dict[int, List[str]] = {}
+
 
 # Mapping of answers to corresponding accords
 ANSWER_TO_ACCORDS = {
@@ -75,31 +79,76 @@ ANSWER_TO_ACCORDS = {
 }
 
 
-# Submit quiz responses
-@quiz_blueprint.route("/submit-quiz/<int:user_id>", methods=["POST"])
-def submit_quiz(user_id):
+@quiz_blueprint.route("/submit-quiz", methods=["POST"])
+def submit_quiz():
+    """
+    Combines quiz submission and accord synchronization using internal Docker networking
+    """
+    # Get authorization token from request headers
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return jsonify({"error": "Authorization token is required"}), 401
+
+    # Get and validate quiz data
     data = request.json
     answers = data.get("answers", [])
-
     if len(answers) != 10:
-        abort(400, description="Quiz must have exactly 10 answers.")
+        return jsonify({"error": "Quiz must have exactly 10 answers"}), 400
 
-    # Using a set to store unique accords
-    accordbank_set = set()
-    for answer in answers:
-        if answer not in ANSWER_TO_ACCORDS:
-            abort(400, description=f"Invalid answer: {answer}")
-        accordbank_set.update(ANSWER_TO_ACCORDS[answer])  # Adds only unique accords
+    try:
+        # Process answers to get unique accords
+        accordbank_set = set()
+        for answer in answers:
+            if answer not in ANSWER_TO_ACCORDS:
+                return jsonify({"error": f"Invalid answer: {answer}"}), 400
+            accordbank_set.update(ANSWER_TO_ACCORDS[answer])
 
-    # Convert set back to list for storage
-    accordbank = list(accordbank_set)
+        # Convert set to list for the request
+        accordbank = list(accordbank_set)
 
-    # Store the accordbank for the user
-    user_accordbanks[user_id] = accordbank
+        # Use internal Docker network URL (service_name:internal_port/path)
+        user_service_url = "http://user-service:5000/scentbank/accords"
 
-    return jsonify(
-        {"message": "Accordbank created successfully", "accordbank": accordbank}
-    )
+        logger.debug(f"Sending request to : {user_service_url}")
+        logger.debug(f"Request payload: {{'favorite_accords': {accordbank}}}")
+        logger.debug(f"Request headers: {auth_header}")
+
+        # Forward the request with the original authorization token
+        response = requests.put(
+            user_service_url,
+            json={"favorite_accords": accordbank},
+            headers={"Authorization": auth_header, "Content-Type": "application/json"},
+        )
+
+        logger.debug(f"Response status code: {response.status_code}")
+        logger.debug(f"Response content: {response.text}")
+
+        if response.status_code == 201:
+            return (
+                jsonify(
+                    {
+                        "message": "Quiz submitted and accords synced successfully",
+                        "accordbank": accordbank,
+                    }
+                ),
+                201,
+            )
+        else:
+            try:
+                error_response = response.json()
+            except ValueError:
+                error_response = {"error": response.text}
+            return jsonify(error_response), response.status_code
+
+    except requests.RequestException as e:
+        logger.error(f"Server Errror : {e}")
+        logger.error(
+            f"Response details (if any): {getattr(e.response, 'text', 'No response text')}"
+        )
+        return (
+            jsonify({"error": f"Failed to sync accords with user service: {str(e)}"}),
+            500,
+        )
 
 
 @quiz_blueprint.route("/accord-data/", methods=["POST"])
@@ -109,6 +158,7 @@ def get_accord_data():
     return jsonify(accords)
 
 
+# NOTE: what does this do ?
 @quiz_blueprint.route("/update-accordbank/<int:user_id>", methods=["PUT"])
 def update_accordbank(user_id):
     data = request.json
@@ -149,6 +199,7 @@ def get_recommendations_for_user(accordbank):
         raise Exception(f"Failed to fetch recommendations: {response.text}")
 
 
+# NOTE: getting recommendation
 @quiz_blueprint.route("/get-recommendations/", methods=["POST"])
 def get_recommendations():
     data = request.json
@@ -170,6 +221,7 @@ def bad_request(error):
     response = jsonify({"description": error.description})
     response.status_code = 400
     return response
+
 
 @quiz_blueprint.route("/sync-user-accords/<int:user_id>", methods=["PUT"])
 def sync_user_accords(user_id):
