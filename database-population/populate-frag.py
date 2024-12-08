@@ -110,7 +110,7 @@ def populate_database(data):
 
 if __name__ == "__main__":
     # NOTE: Update the path to point to the new file
-    file_path = "/Users/panda/Developer/projects/Parfummelier/data-scraping/result+description.txt"
+    file_path = "result.txt"
     perfume_data = parse_perfume_data(file_path)
     print(f"Found {len(perfume_data)} perfumes to add")
     populate_database(perfume_data)
