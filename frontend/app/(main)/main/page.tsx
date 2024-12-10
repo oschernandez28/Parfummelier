@@ -17,21 +17,26 @@ export default function Main() {
   return (
     <ProtectedRoute>
       <div>
+        {/* welcome message to user  */}
         <Content>
-          <h1>
-            Welcome , {user?.firstName} {user?.lastName}
+          <h1 className="text-4xl font-bold tracking-tight text-orange-500 sm:text-6xl mb-4">
+            Welcome,{" "}
+            <span className="text-orange-300">
+              {user?.firstName} {user?.lastName}
+            </span>
           </h1>
+          <p className="text-lg leading-8 text-orange-400 font-medium italic">
+            Where we make scents make sense!
+          </p>
         </Content>
+        {/* explain how to use webiste */}
         <HowitWorkHero />
-        {/* NOTE: Quiz prompt section */}
-        {/* NOTE: Recommendation by user's accord, we need to find a way to connect */}
-        {/* the user's answer to the user's context for the update product */}
-        <UserAccordRecommendation />
-
-        {/* NOTE: Recommendation by Season */}
-        <SeasonalRecommendations />
-
+        {/* For new user signin website */}
         <QuizPromptSection isNewUser={isNewUser}></QuizPromptSection>
+        {/* Recommend product to user base on scentmatch in scentbank */}
+        <UserAccordRecommendation />
+        {/* Recommend product base on local time of the month */}
+        <SeasonalRecommendations />
       </div>
     </ProtectedRoute>
   );

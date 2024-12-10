@@ -140,7 +140,7 @@ const ProductCarousel = ({ recommendations }: RecommendationsProps) => {
                             </span>
                           ))}
                         </div>
-                        <div className="text-xs text-gray-600">
+                        <div className="text-sm text-gray-600">
                           Match: {product.match_ratio}%
                         </div>
                       </CardContent>

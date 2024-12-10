@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import { useAuth } from "@/app/components/auth/AuthContext";
-import { Camera, Heart, Star, Box, Plus } from "lucide-react";
+import { Camera, Heart, Star, Box, Plus, Flower } from "lucide-react";
 import LoadingScreen from "@/app/components/common/LoadingScreen/LoadingScreen";
 import ProtectedRoute from "@/app/components/ProtectedRoute";
 import { AccordBadge } from "@/app/components/ui/AccordBadge/AccordBadge";
@@ -69,8 +69,8 @@ const UserProfile = () => {
             {/* Favorite Accords */}
             <div className="bg-white rounded-lg shadow-lg p-6 transform hover:translate-y-1 transition-all duration-300">
               <div className="flex items-center mb-4 text-purple-600">
-                <Heart className="mr-2" />
-                <h2 className="text-lg font-semibold">Favorite Accords</h2>
+                <Flower className="mr-2" />
+                <h2 className="text-lg font-semibold">Accords</h2>
               </div>
               {user.favorite_accords.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
@@ -96,7 +96,7 @@ const UserProfile = () => {
             <div className="bg-white rounded-lg shadow-lg p-6 transform hover:translate-y-1 transition-all duration-300">
               <div className="flex items-center mb-4 text-blue-600">
                 <Star className="mr-2" />
-                <h2 className="text-lg font-semibold">Collections</h2>
+                <h2 className="text-lg font-semibold">I had it</h2>
               </div>
               {user.favorite_collections.length > 0 ? (
                 <div className="space-y-2">
@@ -122,8 +122,8 @@ const UserProfile = () => {
             {/* Favorite Products */}
             <div className="bg-white rounded-lg shadow-lg p-6 transform hover:translate-y-1 transition-all duration-300">
               <div className="flex items-center mb-4 text-teal-600">
-                <Box className="mr-2" />
-                <h2 className="text-lg font-semibold">Products</h2>
+                <Heart className="mr-2" />
+                <h2 className="text-lg font-semibold">I want it</h2>
               </div>
               {user.favorite_products.length > 0 ? (
                 <div className="space-y-2">

@@ -378,22 +378,53 @@ def update_favorite_products(current_user):
 @token_required
 def update_favorite_collections(current_user):
     try:
-        favorite_collections = request.json.get("favorite_collections", [])
+        collection_name = request.json.get("favorite_product_name")
+        action = request.json.get("action")
+
+        if not collection_name or not action:
+            return jsonify({"error": "Collection name and action are required"}), 400
+
         scent_bank = ScentBank.query.get(current_user.scentID)
         if not scent_bank:
             return jsonify({"error": "ScentBank not found for this user"}), 404
 
-        collection_objects = []
-        for collection in favorite_collections:
-            collection_obj = Collection.query.filter_by(name=collection).first()
-            if not collection_obj:
-                collection_obj = Collection(name=collection)
-                db.session.add(collection_obj)
-            collection_objects.append(collection_obj)
+        # Get or create the product
+        collection_obj = Collection.query.filter_by(name=collection_name).first()
 
-        scent_bank.favorite_collections = collection_objects
+        # When this is the first time user add a new product into favorite_products
+        if not collection_obj:
+            collection_obj = Collection(name=collection_name)
+            db.session.add(collection_obj)
+
+        # NOTE: when user want to add new perfume into favorite_products
+        if action == "add":
+            if collection_obj not in scent_bank.favorite_collections:
+                scent_bank.favorite_collections.append(collection_obj)
+                message = f"Collection {collection_name} added to favorites"
+            else:
+                message = f"Collection {collection_name} is already in favorites"
+
+        # NOTE: when user want to remove the perfume from favorite_accords
+        elif action == "remove":
+            if collection_obj in scent_bank.favorite_collections:
+                scent_bank.favorite_collections.remove(collection_obj)
+                message = f"Collection {collection_name} removed from favorites"
+            else:
+                message = f"Collection {collection_name} was not in favorites"
+
+        else:
+            return jsonify({"error": "Invalid action. User 'add' or 'remove'"}), 400
+
         db.session.commit()
-        return jsonify({"message": "Favorite collections updated successfully"}), 201
+
+        # return updated list of favorite
+        favorite_collections = [
+            collection.name for collection in scent_bank.favorite_collections
+        ]
+        return (
+            jsonify({"message": message, "favorite_collections": favorite_collections}),
+            200,
+        )
 
     except Exception as e:
         db.session.rollback()
@@ -515,7 +546,7 @@ def get_user_info(current_user):
 )
 def get_internal_user_info(user_id):
     """
-    internal endpoint for server-to-service communication.
+    internal endpoint for service-to-service communication.
     Only accessiable within the internal network.
     """
     user = User.query.get_or_404(user_id)

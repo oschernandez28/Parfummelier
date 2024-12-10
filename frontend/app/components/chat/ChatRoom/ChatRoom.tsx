@@ -55,8 +55,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ roomId }) => {
         const tokenResponse = await axios.get("/api/getAccessToken");
         const { access_token } = tokenResponse.data;
 
-        //console.log('Connecting WebSocket with token:', access_token);
-
         // Create WebSocket connection with token
         ws = new WebSocket(
           `ws://localhost:5004/chat/ws/${roomId}?token=${access_token}`,
@@ -76,6 +74,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ roomId }) => {
         // NOTE:
         // the data sent by the message emitter.
 
+        // NOTE : this function is created to make sure that frontend and backend
+        // does not have any duplicate message
         ws.onmessage = (event) => {
           try {
             const message = JSON.parse(event.data);
